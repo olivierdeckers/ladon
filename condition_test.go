@@ -47,10 +47,22 @@ func TestMarshalUnmarshal(t *testing.T) {
 		"options": {
 			"cidr": "127.0.0.1/0"
 		}
+	},
+	"user": {
+		"type": "DefinedCondition"
+	},
+	"role": {
+		"type": "StringEqualCondition",
+		"options": {
+			"equals": "admin"
+		}
 	}
 }`), &cs))
 
-	require.Len(t, cs, 2)
+	require.Len(t, cs, 4)
 	assert.IsType(t, &EqualsSubjectCondition{}, cs["owner"])
 	assert.IsType(t, &CIDRCondition{}, cs["clientIP"])
+	assert.IsType(t, &DefinedCondition{}, cs["user"])
+	assert.IsType(t, &StringEqualCondition{}, cs["role"])
+
 }

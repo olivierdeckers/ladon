@@ -3,22 +3,22 @@ package ladon
 import (
 	"testing"
 
+	"fmt"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"fmt"
 )
-
 
 // A bunch of exemplary policies
 var pols = []Policy{
 	&DefaultPolicy{
-		ID:          "1",
+		ID: "1",
 		Description: `This policy allows max, peter, zac and ken to create, delete and get the listed resources,
 			but only if the client ip matches and the request states that they are the owner of those resources as well.`,
-		Subjects:    []string{"max", "peter", "<zac|ken>"},
-		Resources:   []string{"myrn:some.domain.com:resource:123", "myrn:some.domain.com:resource:345", "myrn:something:foo:<.+>"},
-		Actions:     []string{"<create|delete>", "get"},
-		Effect:      AllowAccess,
+		Subjects:  []string{"max", "peter", "<zac|ken>"},
+		Resources: []string{"myrn:some.domain.com:resource:123", "myrn:some.domain.com:resource:345", "myrn:something:foo:<.+>"},
+		Actions:   []string{"<create|delete>", "get"},
+		Effect:    AllowAccess,
 		Conditions: Conditions{
 			"owner": &EqualsSubjectCondition{},
 			"clientIP": &CIDRCondition{
@@ -27,20 +27,44 @@ var pols = []Policy{
 		},
 	},
 	&DefaultPolicy{
-		ID:        "2",
+		ID:          "2",
 		Description: "This policy allows max to update any resource",
-		Subjects:  []string{"max"},
-		Actions:   []string{"update"},
-		Resources: []string{"<.*>"},
-		Effect:    AllowAccess,
+		Subjects:    []string{"max"},
+		Actions:     []string{"update"},
+		Resources:   []string{"<.*>"},
+		Effect:      AllowAccess,
 	},
 	&DefaultPolicy{
-		ID:        "3",
+		ID:          "3",
 		Description: "This policy denies max to broadcast any of the resources",
-		Subjects:  []string{"max"},
-		Actions:   []string{"broadcast"},
-		Resources: []string{"<.*>"},
-		Effect:    DenyAccess,
+		Subjects:    []string{"max"},
+		Actions:     []string{"broadcast"},
+		Resources:   []string{"<.*>"},
+		Effect:      DenyAccess,
+	},
+	&DefaultPolicy{
+		ID:          "4",
+		Description: "This policy allows client1 to create files if they provide a user",
+		Subjects:    []string{"client1"},
+		Actions:     []string{"create"},
+		Resources:   []string{"<.*>"},
+		Effect:      AllowAccess,
+		Conditions: Conditions{
+			"user": &DefinedCondition{},
+		},
+	},
+	&DefaultPolicy{
+		ID:          "5",
+		Description: "This policy allows client1 to create files if it acts on behalf of a user with admin role",
+		Subjects:    []string{"client1"},
+		Actions:     []string{"create"},
+		Resources:   []string{"<.*>"},
+		Effect:      AllowAccess,
+		Conditions: Conditions{
+			"role": &StringEqualCondition{
+				Equals: "admin",
+			},
+		},
 	},
 }
 
@@ -121,6 +145,64 @@ var cases = []struct {
 		accessRequest: &Request{
 			Subject: "max",
 			Action:  "broadcast",
+		},
+		expectErr: true,
+	},
+	{
+		description: "should pass because policy 4 matches and user was defined",
+		accessRequest: &Request{
+			Subject:  "client1",
+			Action:   "create",
+			Resource: "urn:dome.domain.com:file:1",
+			Context: Context{
+				"user": "john.doe@me.com",
+			},
+		},
+		expectErr: false,
+	},
+	{
+		description: "should fail because policy 4 doesn't match since no user was defined",
+		accessRequest: &Request{
+			Subject:  "client1",
+			Action:   "create",
+			Resource: "urn:dome.domain.com:file:1",
+			Context: Context{
+				"otherfield": "something",
+			},
+		},
+		expectErr: true,
+	},
+	{
+		description: "should pass because policy 5 matches and role equals admin",
+		accessRequest: &Request{
+			Subject:  "client1",
+			Action:   "create",
+			Resource: "urn:dome.domain.com:file:1",
+			Context: Context{
+				"role": "admin",
+			},
+		},
+		expectErr: false,
+	},
+	{
+		description: "should fail because policy 5 doesn't match since role is not admin",
+		accessRequest: &Request{
+			Subject:  "client1",
+			Action:   "create",
+			Resource: "urn:dome.domain.com:file:1",
+			Context: Context{
+				"role": "user",
+			},
+		},
+		expectErr: true,
+	},
+	{
+		description: "should fail because policy 5 doesn't match since no role was specified",
+		accessRequest: &Request{
+			Subject:  "client1",
+			Action:   "create",
+			Resource: "urn:dome.domain.com:file:1",
+			Context:  Context{},
 		},
 		expectErr: true,
 	},
